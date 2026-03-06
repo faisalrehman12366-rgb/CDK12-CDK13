@@ -1,0 +1,158 @@
+setwd("WD")
+
+getwd()  
+list.files() 
+
+
+library(dplyr)
+library(readr)
+library(tidyr)
+library(ggplot2)
+library(stringr)
+
+
+library(data.table)
+expr <- fread("tcga_RSEM_gene_tpm.gz", nThread = 8)
+
+zgrep "ENSG00000167258" tcga_RSEM_gene_tpm.gz > CDK12_TPM.tsv
+
+
+
+con <- gzfile("tcga_RSEM_gene_tpm.gz", "rt")
+
+
+
+cdk12_id <- "ENSG00000167258"  
+
+
+header_line <- readLines(con, n = 1)
+sample_ids <- strsplit(header_line, "\t")[[1]][-c(1,2)]  
+
+
+cdk12_line <- NULL
+repeat {
+  line <- readLines(con, n = 1)
+  if (length(line) == 0) break
+  if (startsWith(line, cdk12_id)) {
+    cdk12_line <- line
+    break
+  }
+}
+
+close(con)
+
+
+cdk12_values <- strsplit(cdk12_line[[1]], "\t")[[1]]
+cdk12_expr <- as.numeric(cdk12_values[-c(1, 2)]) 
+cdk12_df <- data.frame(Sample = sample_ids, Expression = cdk12_expr)
+
+
+head(cdk12_df)
+library(data.table)
+
+
+pheno <- fread("TCGA_phenotype_denseDataOnlyDownload.tsv.gz")
+head(pheno)
+
+
+
+cdk12_df$Sample <- gsub("\\.", "-", cdk12_df$Sample)
+
+
+merged_df <- merge(cdk12_df, pheno, by.x = "Sample", by.y = "sample")
+
+ggplot(merged_df, aes(x = `_primary_disease`, y = Expression)) +
+  geom_boxplot(outlier.size = 0.4, fill = "skyblue") +
+  theme_bw() +
+  theme(
+    axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1),
+    plot.title = element_text(face = "bold")
+  ) +
+  labs(
+    title = "CDK12 Expression Across TCGA Primary Diseases",
+    x = "Primary Disease",
+    y = "CDK12 Expression (TPM or log2TPM)"
+  )
+
+##################################################################################################
+
+
+CDK13:
+
+library(data.table)
+expr <- fread("tcga_RSEM_gene_tpm.gz", nThread = 8)
+
+zgrep "ENSG00000167258" tcga_RSEM_gene_tpm.gz > CDK12_TPM.tsv
+
+
+
+con <- gzfile("tcga_RSEM_gene_tpm.gz", "rt")
+
+
+cdk13_id <- "ENSG00000065883"  # works even without version suffix
+
+
+header_line <- readLines(con, n = 1)
+sample_ids <- strsplit(header_line, "\t")[[1]][-c(1,2)]  # skip gene_id and gene_name
+
+
+cdk13_line <- NULL
+repeat {
+  line <- readLines(con, n = 1)
+  if (length(line) == 0) break
+  if (startsWith(line, cdk13_id)) {   # match CDK13
+    cdk13_line <- line
+    break
+  }
+}
+close(con)
+
+cdk13_values <- strsplit(cdk13_line[[1]], "\t")[[1]]
+cdk13_expr <- as.numeric(cdk13_values[-c(1, 2)])  
+cdk13_df <- data.frame(Sample = sample_ids, Expression = cdk13_expr)
+
+
+
+merged_df_13 <- merge(cdk13_df, pheno, by.x = "Sample", by.y = "sample")
+
+
+merged_df_13 <- merged_df_13 %>%
+  rename(primary_disease = `_primary_disease`)
+
+
+expr_summary <- merged_df_13 %>%
+  group_by(primary_disease) %>%
+  summarise(
+    median_expr = median(Expression, na.rm = TRUE),
+    sd_expr = sd(Expression, na.rm = TRUE),
+    n = n()
+  ) %>%
+  arrange(median_expr)  # 👈 lowest → highest median
+
+
+merged_df_13 <- merged_df_13 %>%
+  mutate(primary_disease = factor(primary_disease, levels = expr_summary$primary_disease))
+
+
+expr_summary <- expr_summary %>%
+  mutate(label = paste0(primary_disease, "\n(n=", n, ")"))
+
+merged_df_13 <- merged_df_13 %>%
+  left_join(expr_summary %>% select(primary_disease, label), by = "primary_disease") %>%
+  mutate(label = factor(label, levels = expr_summary$label))
+
+
+ggplot(merged_df_13, aes(x = label, y = Expression, fill = primary_disease)) +
+  geom_boxplot(outlier.size = 0.5, alpha = 0.8) +
+  geom_point(data = expr_summary, aes(x = label, y = median_expr),
+             color = "black", size = 1.5, shape = 18) +
+  theme_bw() +
+  theme(
+    axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1, size = 8),
+    legend.position = "none"
+  ) +
+  labs(
+    title = "CDK13 Expression Across TCGA Primary Diseases (Ordered by Median)",
+    x = "Tissue",
+    y = "CDK13 Expression log2(TPM)"
+  )
