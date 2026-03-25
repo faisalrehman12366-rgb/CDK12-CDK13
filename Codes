@@ -127,7 +127,7 @@ expr_summary <- merged_df_13 %>%
     sd_expr = sd(Expression, na.rm = TRUE),
     n = n()
   ) %>%
-  arrange(median_expr)  # 👈 lowest → highest median
+  arrange(median_expr) 
 
 
 merged_df_13 <- merged_df_13 %>%
